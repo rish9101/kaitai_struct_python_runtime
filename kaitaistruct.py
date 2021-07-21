@@ -125,6 +125,12 @@ class KaitaiStream(object):
     def read_s1(self):
         return KaitaiStream.packer_s1.unpack(self.read_bytes(1))[0]
 
+    def write_s1(self, io, num):
+        if num not in range(-128, 128):
+            return None
+
+        return self.write_bytes(io, (KaitaiStream.packer_s1.pack(num)))
+
     # ........................................................................
     # Big-endian
     # ........................................................................
@@ -132,11 +138,29 @@ class KaitaiStream(object):
     def read_s2be(self):
         return KaitaiStream.packer_s2be.unpack(self.read_bytes(2))[0]
 
+    def write_s2be(self, io, num):
+        if ((-0x7fff - 1) <= num <= 0x7fff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_s2be.pack(num))
+
     def read_s4be(self):
         return KaitaiStream.packer_s4be.unpack(self.read_bytes(4))[0]
 
+    def write_s4be(self, io, num):
+        if (-2147483648 <= num <= 2147483647) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_s4be.pack(num))
+
     def read_s8be(self):
         return KaitaiStream.packer_s8be.unpack(self.read_bytes(8))[0]
+
+    def write_s8be(self, io, num):
+        if ((-0x7fffffffffffffff - 1) <= num <= 0x7fffffffffffffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_s8be.pack(num))
 
     # ........................................................................
     # Little-endian
@@ -145,11 +169,30 @@ class KaitaiStream(object):
     def read_s2le(self):
         return KaitaiStream.packer_s2le.unpack(self.read_bytes(2))[0]
 
+    def write_s2le(self, io, num):
+        if ((-0x7fff - 1) <= num <= 0x7fff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_s2le.pack(num))
+
     def read_s4le(self):
         return KaitaiStream.packer_s4le.unpack(self.read_bytes(4))[0]
 
+    def write_s4le(self, io, num):
+        if (-2147483648 <= num <= 2147483647) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_s4le.pack(num))
+
+
     def read_s8le(self):
         return KaitaiStream.packer_s8le.unpack(self.read_bytes(8))[0]
+
+    def write_s8le(self, io, num):
+        if ((-0x7fffffffffffffff - 1) <= num <= 0x7fffffffffffffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_s8le.pack(num))
 
     # ------------------------------------------------------------------------
     # Unsigned
@@ -158,6 +201,11 @@ class KaitaiStream(object):
     def read_u1(self):
         return KaitaiStream.packer_u1.unpack(self.read_bytes(1))[0]
 
+    def write_u1(self, io, num):
+        if num not in range(-128, 128):
+            return None
+
+        return self.write_bytes(io, (KaitaiStream.packer_u1.pack(num)))
     # ........................................................................
     # Big-endian
     # ........................................................................
@@ -165,11 +213,30 @@ class KaitaiStream(object):
     def read_u2be(self):
         return KaitaiStream.packer_u2be.unpack(self.read_bytes(2))[0]
 
+    def write_u2be(self, io, num):
+        if (0 <= num <= 0xffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_u2be.pack(num))
+
     def read_u4be(self):
         return KaitaiStream.packer_u4be.unpack(self.read_bytes(4))[0]
 
+    def write_u4be(self, io, num):
+        if (0 <= num <= 0xffffffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_u4be.pack(num))
+
     def read_u8be(self):
         return KaitaiStream.packer_u8be.unpack(self.read_bytes(8))[0]
+
+    def write_u8be(self, io, num):
+        if (0 <= num <= 0xffffffffffffffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_u8be.pack(num))
+
 
     # ........................................................................
     # Little-endian
@@ -178,11 +245,32 @@ class KaitaiStream(object):
     def read_u2le(self):
         return KaitaiStream.packer_u2le.unpack(self.read_bytes(2))[0]
 
+    def write_u2le(self, io, num):
+        if (0 <= num <= 0xffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_u2le.pack(num))
+
     def read_u4le(self):
         return KaitaiStream.packer_u4le.unpack(self.read_bytes(4))[0]
 
+    def write_u4le(self, io, num):
+        if (0 <= num <= 0xffffffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_u4le.pack(num))
+
+
     def read_u8le(self):
         return KaitaiStream.packer_u8le.unpack(self.read_bytes(8))[0]
+
+    def write_u8le(self, io, num):
+        if (0 <= num <= 0xffffffffffffffff) is False:
+            raise Exception()
+        
+        return self.write_bytes(io, KaitaiStream.packer_u8le.pack(num))
+
+
 
     # ========================================================================
     # Floating point numbers
@@ -292,6 +380,38 @@ class KaitaiStream(object):
                 (n, len(r))
             )
         return r
+
+    def write_bytes(self, io, data):
+        if data is None:
+            raise Exception()
+        size = len(data)
+        num_written = io.write(data, size)
+        
+        if num_written != size:
+            raise Exception()
+        return num_written
+
+    def write_bytes_limit(self, io, data, size, term='\x00', padRight='\x00'):
+        if len(data) > size:
+            raise Exception()
+
+        if len(data) < size:
+            data_new = data + term
+            rest_size = size - len(data_new)
+            data_new += (padRight*rest_size)
+        else:
+            data_new = data
+        self.write_bytes(io, data_new)
+
+    def to_byte_array(self):
+        curr_pos = self.pos()
+        self.seek(0)
+        ret = self.read_bytes_full()
+        self.seek(curr_pos)
+        return ret
+
+    def write_stream(self, src):
+        self.write_bytes(src.to_byte_array())
 
     def read_bytes_full(self):
         return self._io.read()
