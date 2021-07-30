@@ -15,6 +15,12 @@ PY2 = sys.version_info[0] == 2
 __version__ = '0.9'
 
 
+class KaitaiField(object):
+    def __init__(self, type: type, value):
+        self.type = type
+        self.value = value
+
+
 class KaitaiStruct(object):
     def __init__(self, stream):
         self._io = stream
