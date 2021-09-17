@@ -1,7 +1,9 @@
 import itertools
 import sys
 import struct
+import random
 from io import open, BytesIO, SEEK_CUR, SEEK_END  # noqa
+from enum import Enum
 
 PY2 = sys.version_info[0] == 2
 
@@ -15,15 +17,99 @@ PY2 = sys.version_info[0] == 2
 __version__ = '0.9'
 
 
-class KaitaiField(object):
-    def __init__(self, type: type, value):
-        self.type = type
-        self.value = value
+class PacketType(Enum):
+    receive = 0
+    transmit = 1
+    delay = 2
+    
 
+class KaitaiField(object):
+    def __init__(self, type: type, default_value = None,  switch_value_on = None, switch_value: dict = None, interaction: PacketType = None):
+        self._type = type
+        self._value = default_value
+        self.switch_value = switch_value
+        self.switch_value_on = switch_value_on
+        if interaction is not None:
+            self.interaction = interaction
+    
+    @property
+    def type(self):
+        return self.type
+
+    @property
+    def value(self):
+        if self.switch_value_on == None:
+            # Add a generate value method here?
+            return self._value
+        
+        v = self.switch_value_on.value
+
+        ret = self.switch_value.get(v, None)
+
+        if ret is None:
+            raise("Missing switch case resolution")
+        return ret
+
+
+class IntKaitaiField(KaitaiField):
+    def __init__(self, signed = False, max_limit = None, min_limit = None, width = 32, *args, **kwargs):
+        super().__init__(int, default_value = 0 if (max_limit > 0 and 0 > min_limit) else min_limit, *args, **kwargs)
+
+        self.max_limit = max_limit
+        self.min_limit = min_limit
+        self.signed = signed
+        self.width = width
+
+
+class FloatKaitaiField(KaitaiField):
+    def __init__(self, max_limit, min_limit, *args, **kwargs):
+        super().__init__(float, default_value = 0 if (max_limit > 0 > min_limit) else min_limit, *args, **kwargs)
+
+        self.max_limit = max_limit
+        self.min_limit = min_limit
+
+
+class StringKaitaiField(KaitaiField):
+    def __init__(self, max_length: int, choices: list = None, *args, **kwargs):
+        super().__init__(bytes, default_value = u'', *args, **kwargs)
+        self.max_length = max_length
+        self.choices = None
+
+
+class BytesKaitaiField(KaitaiField):
+    def __init__(self, max_length: int, choices: list = None, *args, **kwargs):
+        super().__init__(bytes, default_value = b'', *args, **kwargs)
+        self.max_length = max_length
+        self.choices = choices
+
+
+class EnumKaitaiField(KaitaiField):
+    def __init__(self, type, value):
+        # Let's generate a random enum value for instantiation
+        value = type(random.choice(list(type._value2member_map_.keys())))
+        super().__init__(type, value)
+
+
+class SwitchTypeKaitaiField(KaitaiField):
+
+    def __init__(self, dependency: KaitaiField, switch_dict: dict):
+        self.switch_dict = switch_dict if switch_dict is not None else dict() 
+        self.dependency = dependency
+    
+    @property
+    def type(self):
+
+        ret = self.switch_dict.get(self.dependency._value, self.switch_dict.get("_", None))
+
+        if ret is None:
+            raise("Missing switch case resolution")
+        return ret
+    
 
 class KaitaiStruct(object):
-    def __init__(self, stream):
+    def __init__(self, stream, packet_type):
         self._io = stream
+        self._packet_type = PacketType(packet_type)
 
     def __enter__(self):
         return self
