@@ -50,6 +50,17 @@ class KaitaiField(object):
             raise("Missing switch case resolution")
         return ret
 
+    @value.setter
+    def value(self, val):
+        if self.switch_value_on is not None:
+            v = self.switch_value_on.value
+            ret = self.switch_value.get(v, None)
+            if ret is None:
+                raise("Missing switch case resolution")
+            if ret != val:
+                raise("Switch-value-on write mismatch")
+        self._value = val
+
 
 class IntKaitaiField(KaitaiField):
     def __init__(self, signed = False, max_limit = None, min_limit = None, width = 32, *args, **kwargs):
