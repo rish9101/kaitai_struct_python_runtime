@@ -669,6 +669,12 @@ class ValidationNotEqualError(ValidationFailedError):
         self.expected = expected
         self.actual = actual
 
+class ValidationSwitchValueError(ValidationFailedError):
+    """Signals validation failure: the value of the attribute did not match the
+    value expected based on the switch-case provided.
+    """
+    def __init__(self, io, src_path):
+        super(ValidationSwitchValueError, self).__init__("invalid switch-value match %s" % (io, src_path))
 
 class ValidationLessThanError(ValidationFailedError):
     """Signals validation failure: we required "actual" value to be
