@@ -676,6 +676,13 @@ class ValidationSwitchValueError(ValidationFailedError):
     def __init__(self, io, src_path):
         super(ValidationSwitchValueError, self).__init__("invalid switch-value match %s" % (io, src_path))
 
+class ValidationSeqContainsError(ValidationFailedError):
+    """Signals validation failure: the value of the attribute did not match the
+    value expected based on the choices provided.
+    """
+    def __init__(self, io, src_path):
+        super(ValidationSwitchValueError, self).__init__("invalid choice %s" % (io, src_path))
+
 class ValidationLessThanError(ValidationFailedError):
     """Signals validation failure: we required "actual" value to be
     greater than or equal to "min", but it turned out that it's not.
