@@ -16,111 +16,9 @@ PY2 = sys.version_info[0] == 2
 #
 __version__ = '0.9'
 
-
-class PacketType(Enum):
-    receive = 0
-    transmit = 1
-    delay = 2
-    
-
-class KaitaiField(object):
-    def __init__(self, type: type, default_value = None,  switch_value_on = None, switch_value: dict = None, interaction: PacketType = None):
-        self._type = type
-        self._value = default_value
-        self.switch_value = switch_value
-        self.switch_value_on = switch_value_on
-        if interaction is not None:
-            self.interaction = interaction
-    
-    @property
-    def type(self):
-        return self.type
-
-    @property
-    def value(self):
-        if self.switch_value_on == None:
-            # Add a generate value method here?
-            return self._value
-        
-        v = self.switch_value_on.value
-
-        ret = self.switch_value.get(v, None)
-
-        if ret is None:
-            raise("Missing switch case resolution")
-        return ret
-
-    @value.setter
-    def value(self, val):
-        if self.switch_value_on is not None:
-            v = self.switch_value_on.value
-            ret = self.switch_value.get(v, None)
-            if ret is None:
-                raise("Missing switch case resolution")
-            if ret != val:
-                raise("Switch-value-on write mismatch")
-        self._value = val
-
-
-class IntKaitaiField(KaitaiField):
-    def __init__(self, signed = False, max_limit = None, min_limit = None, width = 32, *args, **kwargs):
-        super().__init__(int, default_value = 0 if (max_limit > 0 and 0 > min_limit) else min_limit, *args, **kwargs)
-
-        self.max_limit = max_limit
-        self.min_limit = min_limit
-        self.signed = signed
-        self.width = width
-
-
-class FloatKaitaiField(KaitaiField):
-    def __init__(self, max_limit, min_limit, *args, **kwargs):
-        super().__init__(float, default_value = 0 if (max_limit > 0 > min_limit) else min_limit, *args, **kwargs)
-
-        self.max_limit = max_limit
-        self.min_limit = min_limit
-
-
-class StringKaitaiField(KaitaiField):
-    def __init__(self, max_length: int, choices: list = None, *args, **kwargs):
-        super().__init__(bytes, default_value = u'', *args, **kwargs)
-        self.max_length = max_length
-        self.choices = None
-
-
-class BytesKaitaiField(KaitaiField):
-    def __init__(self, max_length: int, choices: list = None, *args, **kwargs):
-        super().__init__(bytes, default_value = b'', *args, **kwargs)
-        self.max_length = max_length
-        self.choices = choices
-
-
-class EnumKaitaiField(KaitaiField):
-    def __init__(self, type, value):
-        # Let's generate a random enum value for instantiation
-        value = type(random.choice(list(type._value2member_map_.keys())))
-        super().__init__(type, value)
-
-
-class SwitchTypeKaitaiField(KaitaiField):
-
-    def __init__(self, dependency: KaitaiField, switch_dict: dict):
-        self.switch_dict = switch_dict if switch_dict is not None else dict() 
-        self.dependency = dependency
-    
-    @property
-    def type(self):
-
-        ret = self.switch_dict.get(self.dependency._value, self.switch_dict.get("_", None))
-
-        if ret is None:
-            raise("Missing switch case resolution")
-        return ret
-    
-
 class KaitaiStruct(object):
-    def __init__(self, stream, packet_type):
+    def __init__(self, stream):
         self._io = stream
-        self._packet_type = PacketType(packet_type)
 
     def __enter__(self):
         return self
@@ -230,9 +128,12 @@ class KaitaiStream(object):
 
     def write_s1(self, io, num):
         if num not in range(-128, 128):
-            return None
+            raise Exception()
 
         return self.write_bytes(io, (KaitaiStream.packer_s1.pack(num)))
+
+    def generate_s1(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=8, signed=True, min_value=min_value, max_value=max_value)
 
     # ........................................................................
     # Big-endian
@@ -244,8 +145,10 @@ class KaitaiStream(object):
     def write_s2be(self, io, num):
         if ((-0x7fff - 1) <= num <= 0x7fff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_s2be.pack(num))
+
+    def generate_s2be(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=16, signed=True, min_value=min_value, max_value=max_value)
 
     def read_s4be(self):
         return KaitaiStream.packer_s4be.unpack(self.read_bytes(4))[0]
@@ -253,8 +156,10 @@ class KaitaiStream(object):
     def write_s4be(self, io, num):
         if (-2147483648 <= num <= 2147483647) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_s4be.pack(num))
+
+    def generate_s4be(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=32, signed=True, min_value=min_value, max_value=max_value)
 
     def read_s8be(self):
         return KaitaiStream.packer_s8be.unpack(self.read_bytes(8))[0]
@@ -262,8 +167,10 @@ class KaitaiStream(object):
     def write_s8be(self, io, num):
         if ((-0x7fffffffffffffff - 1) <= num <= 0x7fffffffffffffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_s8be.pack(num))
+
+    def generate_s8be(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=64, signed=True, min_value=min_value, max_value=max_value)
 
     # ........................................................................
     # Little-endian
@@ -275,8 +182,10 @@ class KaitaiStream(object):
     def write_s2le(self, io, num):
         if ((-0x7fff - 1) <= num <= 0x7fff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_s2le.pack(num))
+
+    def generate_s2le(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=16, signed=True, min_value=min_value, max_value=max_value)
 
     def read_s4le(self):
         return KaitaiStream.packer_s4le.unpack(self.read_bytes(4))[0]
@@ -284,8 +193,10 @@ class KaitaiStream(object):
     def write_s4le(self, io, num):
         if (-2147483648 <= num <= 2147483647) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_s4le.pack(num))
+
+    def generate_s4le(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=32, signed=True, min_value=min_value, max_value=max_value)
 
 
     def read_s8le(self):
@@ -294,8 +205,10 @@ class KaitaiStream(object):
     def write_s8le(self, io, num):
         if ((-0x7fffffffffffffff - 1) <= num <= 0x7fffffffffffffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_s8le.pack(num))
+
+    def generate_s8le(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=64, signed=True, min_value=min_value, max_value=max_value)
 
     # ------------------------------------------------------------------------
     # Unsigned
@@ -305,10 +218,13 @@ class KaitaiStream(object):
         return KaitaiStream.packer_u1.unpack(self.read_bytes(1))[0]
 
     def write_u1(self, io, num):
-        if num not in range(-128, 128):
-            return None
+        if num not in range(0, 256):
+            raise Exception()
 
         return self.write_bytes(io, (KaitaiStream.packer_u1.pack(num)))
+
+    def generate_u1(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=8, signed=False, min_value=min_value, max_value=max_value)
     # ........................................................................
     # Big-endian
     # ........................................................................
@@ -319,8 +235,10 @@ class KaitaiStream(object):
     def write_u2be(self, io, num):
         if (0 <= num <= 0xffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_u2be.pack(num))
+
+    def generate_u2be(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=16, signed=False, min_value=min_value, max_value=max_value)
 
     def read_u4be(self):
         return KaitaiStream.packer_u4be.unpack(self.read_bytes(4))[0]
@@ -328,8 +246,10 @@ class KaitaiStream(object):
     def write_u4be(self, io, num):
         if (0 <= num <= 0xffffffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_u4be.pack(num))
+
+    def generate_u4be(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=32, signed=False, min_value=min_value, max_value=max_value)
 
     def read_u8be(self):
         return KaitaiStream.packer_u8be.unpack(self.read_bytes(8))[0]
@@ -337,8 +257,10 @@ class KaitaiStream(object):
     def write_u8be(self, io, num):
         if (0 <= num <= 0xffffffffffffffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_u8be.pack(num))
+
+    def generate_u8be(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=64, signed=False, min_value=min_value, max_value=max_value)
 
 
     # ........................................................................
@@ -351,8 +273,10 @@ class KaitaiStream(object):
     def write_u2le(self, io, num):
         if (0 <= num <= 0xffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_u2le.pack(num))
+
+    def generate_u2le(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=16, signed=False, min_value=min_value, max_value=max_value)
 
     def read_u4le(self):
         return KaitaiStream.packer_u4le.unpack(self.read_bytes(4))[0]
@@ -360,9 +284,10 @@ class KaitaiStream(object):
     def write_u4le(self, io, num):
         if (0 <= num <= 0xffffffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_u4le.pack(num))
 
+    def generate_u4le(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=32, signed=False, min_value=min_value, max_value=max_value)
 
     def read_u8le(self):
         return KaitaiStream.packer_u8le.unpack(self.read_bytes(8))[0]
@@ -370,9 +295,10 @@ class KaitaiStream(object):
     def write_u8le(self, io, num):
         if (0 <= num <= 0xffffffffffffffff) is False:
             raise Exception()
-        
         return self.write_bytes(io, KaitaiStream.packer_u8le.pack(num))
 
+    def generate_u8le(self, entropy, min_value=None, max_value=None):
+        return self.generate_number(entropy, bits=64, signed=False, min_value=min_value, max_value=max_value)
 
 
     # ========================================================================
@@ -488,11 +414,133 @@ class KaitaiStream(object):
         if data is None:
             raise Exception()
         size = len(data)
-        num_written = io.write(data, size)
-        
+        num_written = io._io.write(data)
+
         if num_written != size:
             raise Exception()
         return num_written
+
+    @staticmethod
+    def generate_utf8(entropy, length):
+        try:
+            get_char = unichr
+        except NameError:
+            get_char = chr
+
+        # Update this to include code point ranges to be sampled
+        include_ranges = [
+            ( 0x0021, 0x0021 ),
+            ( 0x0023, 0x0026 ),
+            ( 0x0028, 0x007E ),
+            ( 0x00A1, 0x00AC ),
+            ( 0x00AE, 0x00FF ),
+            ( 0x0100, 0x017F ),
+            ( 0x0180, 0x024F ),
+            ( 0x2C60, 0x2C7F ),
+            ( 0x16A0, 0x16F0 ),
+            ( 0x0370, 0x0377 ),
+            ( 0x037A, 0x037E ),
+            ( 0x0384, 0x038A ),
+            ( 0x038C, 0x038C ),
+        ]
+
+        alphabet = [
+            get_char(code_point) for current_range in include_ranges
+                for code_point in range(current_range[0], current_range[1] + 1)
+        ]
+        string = ''
+        while len(string.encode('utf-8')) <= length:
+            choice = entropy.choice(alphabet)
+            string += choice
+        string = string[:-1]
+        return string.encode('utf-8')
+
+    @staticmethod
+    def generate_latin1(entropy, length):
+        try:
+            get_char = unichr
+        except NameError:
+            get_char = chr
+
+        include_ranges = [
+            (0x0020, 0x002F),
+            (0x0030, 0x003F),
+            (0x0040, 0x004F),
+            (0x0050, 0x005F),
+            (0x0060, 0x006F),
+            (0x0070, 0x007E),
+            (0x00A0, 0x00AF),
+            (0x00B0, 0x00BF),
+            (0x00C0, 0x00CF),
+            (0x00D0, 0x00DF),
+            (0x00E0, 0x00EF),
+            (0x00F0, 0x00FF),
+        ]
+
+        alphabet = [
+            get_char(code_point) for current_range in include_ranges
+                for code_point in range(current_range[0], current_range[1] + 1)
+        ]
+        string = ''
+        while len(string.encode('iso-8859-1')) <= length:
+            choice = entropy.choice(alphabet)
+            string += choice
+        string = string[:-1]
+        return string.encode('iso-8859-1')
+
+    @staticmethod
+    def generate_ascii(entropy, length):
+        try:
+            get_char = unichr
+        except NameError:
+            get_char = chr
+
+        include_ranges = [
+            (0x0000, 0x007F)
+        ]
+
+        alphabet = [
+            get_char(code_point) for current_range in include_ranges
+                for code_point in range(current_range[0], current_range[1] + 1)
+        ]
+        string = ''
+        while len(string.encode('ascii')) <= length:
+            choice = entropy.choice(alphabet)
+            string += choice
+        string = string[:-1]
+        return string.encode('ascii')
+
+    @classmethod
+    def generate_bytes(cls, entropy, size, included_term=None, pad=None, encoding=None):
+        length = size
+        if pad is not None:
+            length = entropy.randint(0, size)
+        buffer = bytearray(length)
+
+        if encoding is None:
+            genstr = entropy.randbytes(length)
+        elif encoding.lower() == 'utf-8':
+            genstr = cls.generate_utf8(entropy, length)
+            length = len(genstr)
+        elif encoding.lower() == 'iso8859-1':
+            genstr = cls.generate_latin1(entropy, length)
+            length = len(genstr)
+        elif encoding.lower() == 'ascii':
+            genstr = cls.generate_ascii(entropy, length)
+            length = len(genstr)
+        else:
+            raise RuntimeError(f"generate_bytes does not support {encoding=}")
+        buffer[:length] = genstr
+
+        if included_term is not None:
+            buffer[length - 1] = included_term
+
+        if pad is None:
+            pad = 0
+
+        buffer[length:] = pad.to_bytes(1, byteorder='big') * len(buffer[length:])
+        return buffer
+
 
     def write_bytes_limit(self, io, data, size, term='\x00', padRight='\x00'):
         if len(data) > size:
@@ -514,7 +562,7 @@ class KaitaiStream(object):
         return ret
 
     def write_stream(self, src):
-        self.write_bytes(src.to_byte_array())
+        self.write_bytes(self, src.to_byte_array())
 
     def read_bytes_full(self):
         return self._io.read()
@@ -631,6 +679,21 @@ class KaitaiStream(object):
         except ValueError:
             return value
 
+    @staticmethod
+    def generate_number(entropy, bits, signed, min_value=None, max_value=None):
+        rmin = -(1 << (bits - 1)) if signed else 0
+        rmax = (1 << (bits - 1)) - 1 if signed else (1 << (bits)) - 1
+
+        rmin = rmin if min_value is None else max(rmin, min_value)
+        rmax = rmax if max_value is None else min(rmax, max_value)
+
+        return entropy.randint(rmin, rmax)
+
+
+class ByteBufferKaitaiStream(KaitaiStream):
+    def __new__(cls, size):
+        return KaitaiStream(BytesIO())
+
 
 class KaitaiStructError(Exception):
     """Common ancestor for all error originating from Kaitai Struct usage.
@@ -674,14 +737,14 @@ class ValidationSwitchValueError(ValidationFailedError):
     value expected based on the switch-case provided.
     """
     def __init__(self, io, src_path):
-        super(ValidationSwitchValueError, self).__init__("invalid switch-value match %s" % (io, src_path))
+        super(ValidationSwitchValueError, self).__init__("invalid switch-value match", io, src_path)
 
 class ValidationSeqContainsError(ValidationFailedError):
     """Signals validation failure: the value of the attribute did not match the
     value expected based on the choices provided.
     """
     def __init__(self, io, src_path):
-        super(ValidationSwitchValueError, self).__init__("invalid choice %s" % (io, src_path))
+        super(ValidationSeqContainsError, self).__init__("invalid choice", io, src_path)
 
 class ValidationLessThanError(ValidationFailedError):
     """Signals validation failure: we required "actual" value to be
